@@ -1,0 +1,126 @@
+<html>
+<head>
+<title>analiza_skupien.ipynb</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style type="text/css">
+.s0 { color: #808080;}
+.s1 { color: #cc7832;}
+.s2 { color: #a9b7c6;}
+.s3 { color: #6a8759;}
+.s4 { color: #6897bb;}
+</style>
+</head>
+<body bgcolor="#2b2b2b">
+<table CELLSPACING=0 CELLPADDING=5 COLS=1 WIDTH="100%" BGCOLOR="#606060" >
+<tr><td><center>
+<font face="Arial, Helvetica" color="#000000">
+analiza_skupien.ipynb</font>
+</center></td></tr></table>
+<pre><span class="s0">#%% 
+</span><span class="s1">import </span><span class="s2">pandas </span><span class="s1">as </span><span class="s2">pd</span>
+<span class="s1">import </span><span class="s2">matplotlib.pyplot </span><span class="s1">as </span><span class="s2">plt</span>
+<span class="s1">import </span><span class="s2">numpy </span><span class="s1">as </span><span class="s2">np</span>
+<span class="s1">from </span><span class="s2">sklearn.cluster </span><span class="s1">import </span><span class="s2">KMeans</span>
+<span class="s1">import </span><span class="s2">seaborn </span><span class="s1">as </span><span class="s2">sns</span>
+<span class="s1">from </span><span class="s2">sklearn.metrics </span><span class="s1">import </span><span class="s2">silhouette_score</span>
+<span class="s1">from </span><span class="s2">sklearn.decomposition </span><span class="s1">import </span><span class="s2">PCA</span>
+<span class="s1">from </span><span class="s2">sklearn.model_selection </span><span class="s1">import </span><span class="s2">ParameterGrid</span>
+<span class="s1">import </span><span class="s2">seaborn.objects </span><span class="s1">as </span><span class="s2">so</span>
+<span class="s1">import </span><span class="s2">scipy.cluster.hierarchy </span><span class="s1">as </span><span class="s2">sch</span>
+<span class="s0">#%% 
+</span><span class="s2">df = pd.read_csv(</span><span class="s3">&quot;dane_powiaty.csv&quot;</span><span class="s1">, </span><span class="s2">sep=</span><span class="s3">';'</span><span class="s1">, </span><span class="s2">decimal=</span><span class="s3">','</span><span class="s2">)</span>
+<span class="s0">#%% md 
+</span><span class="s2">&lt;h3&gt;Normalizacja danych&lt;/h3&gt; 
+</span><span class="s0">#%% 
+## Usunięcie danych tekstowych i normalizacja danych. Pozostawienie wyłącznie znormalizowanych danych liczbowych</span>
+<span class="s2">temp_df = df.drop(</span><span class="s3">'POWIAT'</span><span class="s1">,</span><span class="s2">axis=</span><span class="s4">1</span><span class="s2">)</span>
+<span class="s2">df_st = (temp_df-temp_df.mean())/temp_df.std()</span>
+<span class="s2">df_st</span>
+<span class="s0">#%% md 
+</span><span class="s2">&lt;h3&gt;Grupowanie działowe - Metoda K-średnich&lt;/h3&gt; 
+</span><span class="s0">#%% 
+## Redukcja atrybutów do 2 wartości w celu łatwiejszego zobrazowania skupień</span>
+<span class="s2">pca_2 = PCA(n_components=</span><span class="s4">2</span><span class="s2">)</span>
+<span class="s2">pca_2_result = pca_2.fit_transform(df_st)</span>
+<span class="s2">print(</span><span class="s3">'Wytłumaczenie wariancji przez każdą ze składowych wartości: {}'</span><span class="s2">.format(pca_2.explained_variance_ratio_))</span>
+<span class="s2">print(</span><span class="s3">'Całkowita wariancja tłumaczona przez obie wartości: {:.2%}'</span><span class="s2">.format(np.sum(pca_2.explained_variance_ratio_)))</span>
+<span class="s0">#%% 
+</span><span class="s2">dataset_pca = pd.DataFrame(abs(pca_2.components_)</span><span class="s1">, </span><span class="s2">columns=df_st.columns</span><span class="s1">, </span><span class="s2">index=[</span><span class="s3">'PC_1'</span><span class="s1">, </span><span class="s3">'PC_2'</span><span class="s2">])</span>
+<span class="s2">print(</span><span class="s3">'</span><span class="s1">\n\n</span><span class="s3">'</span><span class="s1">, </span><span class="s2">dataset_pca)</span>
+<span class="s0">#%% 
+## Obliczanie optymalnej ilości klastrów przy pomocy metody Silhouette</span>
+<span class="s2">parameters = [</span><span class="s4">2</span><span class="s1">, </span><span class="s4">3</span><span class="s1">, </span><span class="s4">4</span><span class="s1">, </span><span class="s4">5</span><span class="s1">, </span><span class="s4">6</span><span class="s1">, </span><span class="s4">7</span><span class="s1">, </span><span class="s4">8</span><span class="s1">, </span><span class="s4">9 </span><span class="s1">,</span><span class="s4">10</span><span class="s2">]</span>
+<span class="s2">parameter_grid = ParameterGrid({</span><span class="s3">'n_clusters'</span><span class="s2">: parameters})</span>
+<span class="s2">best_score = -</span><span class="s4">1</span>
+<span class="s2">kmeans_model = KMeans()</span>
+<span class="s2">silhouette_scores = []</span>
+<span class="s0"># Ewaluacjia na podstawie współczynnika silhouette_score</span>
+<span class="s1">for </span><span class="s2">p </span><span class="s1">in </span><span class="s2">parameter_grid:</span>
+    <span class="s2">kmeans_model.set_params(**p)</span>
+    <span class="s2">kmeans_model.fit(df_st)</span>
+    <span class="s2">ss = silhouette_score(df_st</span><span class="s1">, </span><span class="s2">kmeans_model.labels_)</span>
+    <span class="s2">silhouette_scores += [ss]</span>
+    <span class="s1">if </span><span class="s2">ss &gt; best_score:</span>
+        <span class="s2">best_score = ss</span>
+        <span class="s2">best_grid = p</span>
+<span class="s0"># Stworzenie wykresu współczynników dla poszczególnych ilości klastrów</span>
+<span class="s2">plt.bar(range(len(silhouette_scores))</span><span class="s1">, </span><span class="s2">list(silhouette_scores)</span><span class="s1">, </span><span class="s2">align=</span><span class="s3">'center'</span><span class="s1">, </span><span class="s2">color=</span><span class="s3">'#722f59'</span><span class="s1">, </span><span class="s2">width=</span><span class="s4">0.5</span><span class="s2">)</span>
+<span class="s2">plt.xticks(range(len(silhouette_scores))</span><span class="s1">, </span><span class="s2">list(parameters))</span>
+<span class="s2">plt.title(</span><span class="s3">'Metoda profilu - Silhouette'</span><span class="s1">, </span><span class="s2">fontweight=</span><span class="s3">'bold'</span><span class="s2">)</span>
+<span class="s2">plt.xlabel(</span><span class="s3">'Liczba klastrów'</span><span class="s2">)</span>
+<span class="s2">plt.show()</span>
+<span class="s0">#%% 
+</span><span class="s2">kmeans = KMeans(n_clusters=</span><span class="s4">2</span><span class="s2">)</span>
+<span class="s2">kmeans.fit(df_st)</span>
+<span class="s2">y_kmeans = kmeans.predict(df_st)</span>
+<span class="s2">sklearn_centers = kmeans.cluster_centers_</span>
+<span class="s2">centroids_pca = pca_2.transform(sklearn_centers)</span>
+<span class="s0">#%% 
+</span><span class="s2">df_final = pd.DataFrame()</span>
+<span class="s2">df_final[</span><span class="s3">'dim1'</span><span class="s2">] = pca_2_result[:</span><span class="s1">, </span><span class="s4">0</span><span class="s2">]</span>
+<span class="s2">df_final[</span><span class="s3">'dim2'</span><span class="s2">] = pca_2_result[:</span><span class="s1">, </span><span class="s4">1</span><span class="s2">]</span>
+<span class="s2">df_final[</span><span class="s3">'kmean_cluster'</span><span class="s2">] = y_kmeans</span>
+<span class="s2">powiaty = [powiat[</span><span class="s4">7</span><span class="s2">:] </span><span class="s1">for </span><span class="s2">powiat </span><span class="s1">in </span><span class="s2">df[</span><span class="s3">&quot;POWIAT&quot;</span><span class="s2">]]</span>
+<span class="s2">df_final[</span><span class="s3">'POWIAT'</span><span class="s2">] = powiaty</span>
+<span class="s0">#%% 
+</span><span class="s2">df_test = pd.DataFrame()</span>
+<span class="s2">df_test[</span><span class="s3">'x'</span><span class="s2">] = centroids_pca[:</span><span class="s1">, </span><span class="s4">0</span><span class="s2">]</span>
+<span class="s2">df_test[</span><span class="s3">'y'</span><span class="s2">] = centroids_pca[:</span><span class="s1">, </span><span class="s4">1</span><span class="s2">]</span>
+<span class="s0">#%% 
+</span><span class="s2">sns.lmplot(data=df_final</span><span class="s1">, </span><span class="s2">x=</span><span class="s3">'dim1'</span><span class="s1">, </span><span class="s2">y=</span><span class="s3">'dim2'</span><span class="s1">, </span><span class="s2">fit_reg=</span><span class="s1">False, </span><span class="s2">hue = </span><span class="s3">'kmean_cluster'</span><span class="s1">, </span><span class="s2">palette = [</span><span class="s3">'#eb6c6a'</span><span class="s1">, </span><span class="s3">'#6aeb6c'</span><span class="s1">, </span><span class="s3">'#6c6aeb'</span><span class="s1">, </span><span class="s3">'#b37f2d'</span><span class="s2">]).set(title=</span><span class="s3">'Wizualizacja grup'</span><span class="s2">)</span>
+<span class="s2">plt.scatter(centroids_pca[:</span><span class="s1">, </span><span class="s4">0</span><span class="s2">]</span><span class="s1">, </span><span class="s2">centroids_pca[:</span><span class="s1">, </span><span class="s4">1</span><span class="s2">]</span><span class="s1">, </span><span class="s2">c=</span><span class="s3">'black'</span><span class="s1">, </span><span class="s2">s=</span><span class="s4">100</span><span class="s1">, </span><span class="s2">alpha=</span><span class="s4">0.5</span><span class="s2">)</span>
+<span class="s2">plt.show()</span>
+<span class="s0">#%% 
+</span><span class="s2">p = (</span>
+    <span class="s2">so.Plot(df_final</span><span class="s1">, </span><span class="s2">x=</span><span class="s3">&quot;dim1&quot;</span><span class="s1">, </span><span class="s2">y=</span><span class="s3">&quot;dim2&quot;</span><span class="s1">, </span><span class="s2">text=</span><span class="s3">&quot;POWIAT&quot;</span><span class="s1">, </span><span class="s2">color=</span><span class="s3">&quot;kmean_cluster&quot;</span><span class="s2">)</span>
+    <span class="s2">.add(so.Dot())</span>
+    <span class="s2">.add(so.Text(valign=</span><span class="s3">&quot;bottom&quot;</span><span class="s1">, </span><span class="s2">fontsize=</span><span class="s4">6</span><span class="s2">))</span>
+    <span class="s2">.scale(color=</span><span class="s3">&quot;pastel&quot;</span><span class="s2">)</span>
+    <span class="s2">.layout(size=(</span><span class="s4">13</span><span class="s1">,</span><span class="s4">8</span><span class="s2">))</span>
+<span class="s2">)</span>
+<span class="s2">p.plot()</span>
+<span class="s0">#%% md 
+</span><span class="s2">&lt;h3&gt;Grupowanie hierarchiczne - Metoda Warda&lt;/h3&gt; 
+</span><span class="s0">#%% 
+</span><span class="s2">labels = [i </span><span class="s1">for </span><span class="s2">i </span><span class="s1">in </span><span class="s2">df.POWIAT]</span>
+<span class="s2">model = sch.linkage(df_st</span><span class="s1">, </span><span class="s2">method  = </span><span class="s3">&quot;ward&quot;</span><span class="s1">, </span><span class="s2">metric=</span><span class="s3">'euclidean'</span><span class="s2">)</span>
+<span class="s2">dendrogram = sch.dendrogram(model</span><span class="s1">, </span><span class="s2">labels=labels</span><span class="s1">, </span><span class="s2">orientation=</span><span class="s3">'left'</span><span class="s2">)</span>
+<span class="s2">plt.title(</span><span class="s3">'Dendrogram'</span><span class="s2">)</span>
+<span class="s2">plt.xlabel(</span><span class="s3">'Odległość Euklidesowa'</span><span class="s2">)</span>
+<span class="s2">plt.ylabel(</span><span class="s3">'Marka'</span><span class="s2">)</span>
+<span class="s2">plt.show()</span>
+<span class="s0">#%% 
+</span><span class="s2">clusters = sch.fcluster(model</span><span class="s1">, </span><span class="s4">2</span><span class="s1">, </span><span class="s2">criterion=</span><span class="s3">'maxclust'</span><span class="s2">)</span>
+<span class="s2">df_final[</span><span class="s3">'ward_cluster'</span><span class="s2">] = clusters</span>
+<span class="s0">#%% 
+</span><span class="s2">(</span>
+    <span class="s2">so.Plot(df_final</span><span class="s1">, </span><span class="s2">x=</span><span class="s3">&quot;dim1&quot;</span><span class="s1">, </span><span class="s2">y=</span><span class="s3">&quot;dim2&quot;</span><span class="s1">, </span><span class="s2">text=</span><span class="s3">&quot;POWIAT&quot;</span><span class="s1">, </span><span class="s2">color=</span><span class="s3">&quot;ward_cluster&quot;</span><span class="s2">)</span>
+    <span class="s2">.add(so.Dot())</span>
+    <span class="s2">.add(so.Text(valign=</span><span class="s3">&quot;top&quot;</span><span class="s1">, </span><span class="s2">fontsize=</span><span class="s4">6</span><span class="s2">))</span>
+    <span class="s2">.scale(color=</span><span class="s3">&quot;pastel&quot;</span><span class="s2">)</span>
+    <span class="s2">.layout(size=(</span><span class="s4">13</span><span class="s1">,</span><span class="s4">8</span><span class="s2">))</span>
+<span class="s2">)</span>
+<span class="s0">#%% 
+</span></pre>
+</body>
+</html>
